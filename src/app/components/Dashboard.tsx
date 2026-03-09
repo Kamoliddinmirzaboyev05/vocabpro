@@ -251,14 +251,14 @@ export function Dashboard() {
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-xl font-bold text-white mb-1">
-                      {collection.name}
+                      {collection.title || collection.name}
                     </h3>
                     <p className="text-sm text-slate-400">{collection.description}</p>
                   </div>
                   
                   <div className="flex items-center text-slate-400">
                     <BookOpen className="h-4 w-4 mr-2" />
-                    <span className="text-sm">{collection.wordCount} words</span>
+                    <span className="text-sm">{collection.wordCount || collection.word_count || 0} words</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 pt-2">
