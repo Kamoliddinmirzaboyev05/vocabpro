@@ -1,13 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, Clock, Loader2 } from "lucide-react";
-import type { Word } from "../data/mockData";
+import { ArrowLeft, Clock } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Progress } from "./ui/progress";
 import { motion } from "motion/react";
 import * as api from "../utils/api";
-import { mockCollections } from "../data/mockData";
+import { PageSkeleton } from "./PageSkeleton";
 
 export function Quiz() {
   const { collectionId } = useParams();
@@ -19,10 +18,10 @@ export function Quiz() {
   const [score, setScore] = useState(0);
   const [showFeedback, setShowFeedback] = useState(false);
   const [timeLeft, setTimeLeft] = useState(15);
-  const [answeredWords, setAnsweredWords] = useState<{
-    word: Word;
-    correct: boolean;
-  }[]>([]);
+  const [answeredWords, setAnsweredWords] = useState<{ word: any; correct: boolean }[]>([]);
+  const [currentRound, setCurrentRound] = useState(1);
+  const [mistakeCounts, setMistakeCounts] = useState<Record<string, number>>({});
+  const [reviewWords, setReviewWords] = useState<any[]>([]);
 
   useEffect(() => {
     loadCollection();
@@ -32,17 +31,8 @@ export function Quiz() {
     try {
       setLoading(true);
       if (collectionId) {
-        try {
-          const data = await api.getCollection(collectionId);
-          setCollection(data);
-        } catch (apiError) {
-          // Fallback to mock data if backend is unavailable
-          console.log("Backend unavailable, using mock data");
-          const mockData = mockCollections.find((c) => c.id === collectionId);
-          if (mockData) {
-            setCollection(mockData);
-          }
-        }
+        const data = await api.getCollection(collectionId);
+        setCollection(data);
       }
     } catch (error) {
       console.error("Failed to load collection:", error);
@@ -51,8 +41,30 @@ export function Quiz() {
     }
   };
 
-  const currentWord = collection?.words[currentQuestionIndex];
-  const progress = ((currentQuestionIndex + 1) / (collection?.words.length || 1)) * 100;
+  const words = collection?.words || [];
+  const activeWords = currentRound <= 5 ? words : reviewWords;
+  const currentWord = activeWords?.[currentQuestionIndex];
+  const progress = ((currentQuestionIndex + 1) / (activeWords?.length || 1)) * 100;
+
+  const shuffleArray = <T,>(arr: T[]): T[] => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  const options = useMemo(() => {
+    const correct = currentWord?.translation;
+    if (!correct) return [];
+    const candidates = words
+      .filter((_: any, idx: number) => idx !== currentQuestionIndex)
+      .map((w: any) => w.translation)
+      .filter((t: string | undefined) => !!t && t !== correct);
+    const wrongs = shuffleArray(candidates).slice(0, 3);
+    return shuffleArray([correct, ...wrongs]);
+  }, [words, currentQuestionIndex, currentWord]);
 
   useEffect(() => {
     if (timeLeft > 0 && !showFeedback) {
@@ -63,11 +75,18 @@ export function Quiz() {
     }
   }, [timeLeft, showFeedback]);
 
+  useEffect(() => {
+    if (words?.length) {
+      console.log("Current active word:", words[currentQuestionIndex]);
+    }
+  }, [currentQuestionIndex, collection]);
+
   const handleAnswer = (answer: string | null) => {
     setSelectedAnswer(answer);
     setShowFeedback(true);
     
-    const isCorrect = answer === currentWord?.correctAnswer;
+    const correctTarget = currentWord?.correctAnswer ?? currentWord?.translation;
+    const isCorrect = answer === correctTarget;
     if (isCorrect) {
       setScore(score + 100);
     }
@@ -77,34 +96,86 @@ export function Quiz() {
         ...answeredWords,
         { word: currentWord, correct: isCorrect },
       ]);
+      if (!isCorrect && currentWord.id) {
+        setMistakeCounts((prev) => ({
+          ...prev,
+          [currentWord.id]: (prev[currentWord.id] || 0) + 1,
+        }));
+      }
     }
 
     setTimeout(() => {
-      if (currentQuestionIndex < (collection?.words.length || 0) - 1) {
+      const setLength = activeWords?.length || 0;
+      if (currentQuestionIndex < setLength - 1) {
         setCurrentQuestionIndex(currentQuestionIndex + 1);
         setSelectedAnswer(null);
         setShowFeedback(false);
         setTimeLeft(15);
       } else {
-        // Quiz complete - navigate to summary
-        navigate("/summary", {
-          state: {
-            score,
-            total: collection?.words.length || 0,
-            answeredWords,
-            collectionName: collection?.name,
-          },
-        });
+        if (currentRound < 5) {
+          setCurrentRound(currentRound + 1);
+          setCurrentQuestionIndex(0);
+          setSelectedAnswer(null);
+          setShowFeedback(false);
+          setTimeLeft(15);
+        } else if (currentRound === 5) {
+          const sortedIds = Object.entries(mistakeCounts)
+            .sort((a, b) => b[1] - a[1])
+            .map(([id]) => id);
+          const selected = words.filter((w: any) => sortedIds.includes(w.id));
+          setReviewWords(selected);
+          if (selected.length === 0) {
+            navigate("/summary", {
+              state: {
+                score,
+                total: collection?.words.length || 0,
+                answeredWords,
+                collectionName: collection?.name,
+              },
+            });
+            return;
+          }
+          setCurrentRound(6);
+          setCurrentQuestionIndex(0);
+          setSelectedAnswer(null);
+          setShowFeedback(false);
+          setTimeLeft(15);
+        } else if (currentRound === 6) {
+          setCurrentRound(7);
+          setCurrentQuestionIndex(0);
+          setSelectedAnswer(null);
+          setShowFeedback(false);
+          setTimeLeft(15);
+        } else {
+          navigate("/summary", {
+            state: {
+              score,
+              total: collection?.words.length || 0,
+              answeredWords,
+              collectionName: collection?.name,
+            },
+          });
+        }
       }
     }, 1500);
   };
 
   if (loading) {
+    return <PageSkeleton variant="quiz" />;
+  }
+
+  if (!collection?.words) {
+    return <PageSkeleton variant="quiz" />;
+  }
+
+  if (collection.words.length === 0) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-12 w-12 text-emerald animate-spin mx-auto mb-4" />
-          <p className="text-foreground">Loading quiz...</p>
+          <p className="text-foreground mb-4">No words found</p>
+          <Button onClick={() => navigate("/dashboard")} className="bg-emerald hover:bg-emerald-dark">
+            Back to Dashboard
+          </Button>
         </div>
       </div>
     );
@@ -140,7 +211,9 @@ export function Quiz() {
             <div>
               <h1 className="text-2xl font-bold text-foreground">{collection.name}</h1>
               <p className="text-muted-foreground">
-                Question {currentQuestionIndex + 1} of {collection.words.length}
+                {currentRound <= 5
+                  ? `Round ${currentRound}/5 • Question ${currentQuestionIndex + 1} of ${activeWords.length}`
+                  : `Final: Mastery Round • Question ${currentQuestionIndex + 1} of ${activeWords.length}`}
               </p>
             </div>
             <div className="text-right">
@@ -200,14 +273,15 @@ export function Quiz() {
           <Card className="bg-card border-border p-8 mb-6">
             <div className="text-center mb-8">
               <p className="text-sm text-muted-foreground mb-2">Translate this word:</p>
-              <h2 className="text-4xl font-bold text-foreground">{currentWord.english}</h2>
+              <h2 className="text-4xl font-bold text-foreground">{currentWord?.word ?? currentWord?.english}</h2>
             </div>
 
             {/* Answer Options */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {currentWord.options.map((option, index) => {
+              {options?.map((option: string, index: number) => {
                 const isSelected = selectedAnswer === option;
-                const isCorrect = option === currentWord.correctAnswer;
+                const correctTarget = currentWord?.correctAnswer ?? currentWord?.translation;
+                const isCorrect = option === correctTarget;
                 const showCorrect = showFeedback && isCorrect;
                 const showIncorrect = showFeedback && isSelected && !isCorrect;
 
@@ -246,14 +320,14 @@ export function Quiz() {
           >
             <p
               className={`text-xl font-semibold ${
-                selectedAnswer === currentWord.correctAnswer
+                selectedAnswer === (currentWord?.correctAnswer ?? currentWord?.translation)
                   ? "text-emerald"
                   : "text-destructive"
               }`}
             >
-              {selectedAnswer === currentWord.correctAnswer
+              {selectedAnswer === (currentWord?.correctAnswer ?? currentWord?.translation)
                 ? "Correct! +100 points"
-                : `Incorrect. The answer was: ${currentWord.correctAnswer}`}
+                : `Incorrect. The answer was: ${currentWord?.correctAnswer ?? currentWord?.translation}`}
             </p>
           </motion.div>
         )}

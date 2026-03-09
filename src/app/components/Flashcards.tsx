@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, Volume2, RotateCw, X, Check, Loader2 } from "lucide-react";
-import type { Word } from "../data/mockData";
+import { ArrowLeft, Volume2, RotateCw, X, Check } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { motion } from "motion/react";
 import * as api from "../utils/api";
-import { mockCollections } from "../data/mockData";
+import { PageSkeleton } from "./PageSkeleton";
 
 export function Flashcards() {
   const { collectionId } = useParams();
@@ -26,17 +25,8 @@ export function Flashcards() {
     try {
       setLoading(true);
       if (collectionId) {
-        try {
-          const data = await api.getCollection(collectionId);
-          setCollection(data);
-        } catch (apiError) {
-          // Fallback to mock data if backend is unavailable
-          console.log("Backend unavailable, using mock data");
-          const mockData = mockCollections.find((c) => c.id === collectionId);
-          if (mockData) {
-            setCollection(mockData);
-          }
-        }
+        const data = await api.getCollection(collectionId);
+        setCollection(data);
       }
     } catch (error) {
       console.error("Failed to load collection:", error);
@@ -94,14 +84,7 @@ export function Flashcards() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 text-emerald animate-spin mx-auto mb-4" />
-          <p className="text-foreground">Loading flashcards...</p>
-        </div>
-      </div>
-    );
+    return <PageSkeleton variant="flashcards" />;
   }
 
   if (!collection || !currentWord) {

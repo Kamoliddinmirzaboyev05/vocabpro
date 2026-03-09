@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { ArrowLeft, Trophy, Zap, Loader2, Copy, Check } from "lucide-react";
+import { ArrowLeft, Trophy, Zap, Copy, Check, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Progress } from "./ui/progress";
@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import * as api from "../utils/api";
+import { PageSkeleton } from "./PageSkeleton";
 
 export function BattleRoom() {
   const { collectionId } = useParams();
@@ -385,14 +386,7 @@ export function BattleRoom() {
 
   // Loading or battle active
   if (loading || !collection || !battle || battle.status !== "active") {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 text-emerald animate-spin mx-auto mb-4" />
-          <p className="text-foreground">Loading battle...</p>
-        </div>
-      </div>
-    );
+    return <PageSkeleton variant="battle" />;
   }
 
   const currentWord = collection.words[currentQuestionIndex];

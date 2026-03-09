@@ -3,15 +3,15 @@ import { Trophy, Medal, BookOpen, RotateCw, Home, Target } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { motion } from "motion/react";
-import type { Participant, Word } from "../data/mockData";
+ 
 
 interface LocationState {
   score: number;
   total: number;
   isBattle?: boolean;
   isFlashcards?: boolean;
-  participants?: Participant[];
-  answeredWords?: { word: Word; correct: boolean }[];
+  participants?: any[];
+  answeredWords?: { word: any; correct: boolean }[];
   knownCount?: number;
   unknownCount?: number;
   collectionName?: string;

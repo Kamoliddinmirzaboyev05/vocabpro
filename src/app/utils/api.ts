@@ -5,7 +5,7 @@ import { supabase } from "./supabaseClient";
 export async function getAllCollections() {
   const { data, error } = await supabase
     .from('collections')
-    .select('*')
+    .select('*, words(*)')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -13,17 +13,25 @@ export async function getAllCollections() {
     return [];
   }
 
+  console.log("Supabase collections raw data:", data);
+
   return (data || []).map((c: any) => ({
     ...c,
     name: c.title, // Map title to name for frontend compatibility
-    wordCount: c.word_count || 0 
+    wordCount: (c.words?.length ?? c.word_count) || 0,
+    words: (c.words || []).map((w: any) => ({
+      ...w,
+      english: w.word,
+      correctAnswer: w.translation,
+      exampleSentence: w.example_sentence || "",
+    })),
   }));
 }
 
 export async function getCollection(id: string) {
   const { data, error } = await supabase
     .from('collections')
-    .select('*')
+    .select('*, words(*)')
     .eq('id', id)
     .single();
 
@@ -32,24 +40,17 @@ export async function getCollection(id: string) {
     throw error;
   }
 
-  // Also fetch words for this collection
-  const { data: words, error: wordsError } = await supabase
-    .from('words')
-    .select('*')
-    .eq('collection_id', id);
-
-  if (wordsError) {
-     console.error("Error fetching words:", wordsError);
-  }
+  console.log("Supabase collection raw data:", data);
 
   return {
     ...data,
     name: data.title,
-    wordCount: data.word_count || 0,
-    words: (words || []).map((w: any) => ({
+    wordCount: (data.words?.length ?? data.word_count) || 0,
+    words: (data.words || []).map((w: any) => ({
       ...w,
-      correctAnswer: w.correct_answer,
-      exampleSentence: w.example_sentence
+      english: w.word,
+      correctAnswer: w.translation, // Fallback to translation if needed by frontend logic
+      exampleSentence: w.example_sentence || "" // Placeholder
     }))
   };
 }
@@ -70,8 +71,6 @@ export async function createCollection(
     .from('collections')
     .insert({ 
       title, 
-      description, 
-      word_count: words.length,
       user_id: session.user.id
     })
     .select()
@@ -83,14 +82,14 @@ export async function createCollection(
   }
 
   // 3. Insert words linked to this collection
-  // Assuming words table has a collection_id foreign key
+  // Only insert fields that exist in the DB schema: id, word, translation, collection_id, user_id, mastery_level, audio_url, next_review
   const wordsToInsert = words.map((w) => ({
     collection_id: collection.id,
-    english: w.english,
+    user_id: session.user.id,
+    word: w.english,
     translation: w.translation,
-    example_sentence: w.exampleSentence, // Ensure snake_case if DB requires it
-    correct_answer: w.correctAnswer,
-    options: w.options
+    mastery_level: 0,
+    // audio_url and next_review can be null or have defaults
   }));
 
   const { error: wordsError } = await supabase
