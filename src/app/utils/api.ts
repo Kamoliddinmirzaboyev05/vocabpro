@@ -157,6 +157,18 @@ export async function createCollection(
   return { ...collection, words: words, wordCount: words.length }; 
 }
 
+export async function deleteCollection(id: string) {
+  const { error } = await supabase
+    .from('collections')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error("Error deleting collection:", error);
+    throw error;
+  }
+}
+
 // --- Battles ---
 
 // NOTE: For battles, we might still need real-time or edge functions if we want server-side state.

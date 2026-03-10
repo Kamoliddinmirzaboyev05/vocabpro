@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { Plus, BookOpen, Swords, Brain, Loader2 } from "lucide-react";
+import { Plus, BookOpen, Swords, Brain, Loader2, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
@@ -136,6 +136,23 @@ export function Dashboard() {
       }
     } catch (e) {
       setJsonError("Invalid JSON format");
+    }
+  };
+
+  const handleDeleteCollection = async (collectionId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    
+    if (window.confirm("Are you sure you want to delete this collection? This action cannot be undone.")) {
+      try {
+        // Optimistic update
+        setCollections(prev => prev.filter(c => c.id !== collectionId));
+        await api.deleteCollection(collectionId);
+      } catch (error) {
+        console.error("Failed to delete collection:", error);
+        // Revert optimistic update on error
+        fetchCollectionsDirect();
+        alert("Failed to delete collection. Please try again.");
+      }
     }
   };
 
@@ -450,11 +467,23 @@ export function Dashboard() {
                     <div className="h-12 w-12 rounded-lg bg-emerald/10 flex items-center justify-center text-emerald group-hover:scale-110 transition-transform">
                       <BookOpen className="h-6 w-6" />
                     </div>
-                    {collection.is_public && (
-                      <span className="bg-blue-500/20 text-blue-500 text-xs px-2 py-1 rounded-full border border-blue-500/50">
-                        Public
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {collection.is_public && (
+                        <span className="bg-blue-500/20 text-blue-500 text-xs px-2 py-1 rounded-full border border-blue-500/50">
+                          Public
+                        </span>
+                      )}
+                      {(collection.user_id === user?.id || user?.email === ADMIN_EMAIL) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 -mt-1 -mr-2"
+                          onClick={(e) => handleDeleteCollection(collection.id, e)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="space-y-4">
