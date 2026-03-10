@@ -56,6 +56,8 @@ export async function getPublicCollections() {
 export async function cloneCollection(collectionId: string) {
   const original = await getCollection(collectionId);
   
+  // Create a clean copy of words, stripping original IDs and metadata
+  // This ensures we don't accidentally copy the admin's user_id or the old collection_id
   const words = original.words.map((w: any) => ({
     english: w.english || w.word,
     translation: w.translation || w.correctAnswer
@@ -65,7 +67,7 @@ export async function cloneCollection(collectionId: string) {
     original.title,
     original.description || "",
     words,
-    false,
+    false, // Clone is always private initially
     null,
     null
   );

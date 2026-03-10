@@ -30,6 +30,7 @@ export function Dashboard() {
   const [isPublic, setIsPublic] = useState(false);
   const [topic, setTopic] = useState("");
   const [level, setLevel] = useState("A1");
+  const [activeFilter, setActiveFilter] = useState("All");
   
   const ADMIN_EMAIL = "kamoliddinmirzaboyev2005@gmail.com";
 
@@ -52,10 +53,30 @@ export function Dashboard() {
   const fetchCollectionsDirect = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      let query = supabase
         .from("collections")
         .select("*, words(*)")
         .order("created_at", { ascending: false });
+
+      if (user) {
+        // Fetch user's own collections OR public collections
+        // Note: This requires an RLS policy that allows reading public collections
+        // or the user_id matching logic.
+        // Since we want "All" to show "My Collections" (which are private) 
+        // and "Public" to show public ones, we might want to fetch everything 
+        // and filter client-side, OR use an OR condition.
+        // Assuming RLS allows reading 'is_public=true' for everyone.
+        
+        // However, standard supabase-js doesn't easily support "OR" across different columns 
+        // combined with other filters in a simple way without 'or' method.
+        // .or(`user_id.eq.${user.id},is_public.eq.true`)
+        
+        query = query.or(`user_id.eq.${user.id},is_public.eq.true`);
+      }
+
+      const { data, error } = await query;
       
       if (error) {
         console.error("Supabase collections fetch error:", error);
@@ -173,6 +194,24 @@ export function Dashboard() {
   if (loading) {
     return <PageSkeleton variant="dashboard" />;
   }
+
+  const filteredCollections = collections.filter(c => {
+    if (activeFilter === "All") {
+      // Show user's collections (both private and public ones they own)
+      // We explicitly check user_id to avoid showing public collections created by others in "All"
+      return c.user_id === user?.id;
+    }
+    if (activeFilter === "Public") {
+      // Show ONLY public collections
+      // This includes Admin's public collections and any other public collections
+      return c.is_public === true;
+    }
+    if (activeFilter === "Local") {
+      // Show user's private collections
+      return c.user_id === user?.id && c.is_public === false;
+    }
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -354,76 +393,112 @@ export function Dashboard() {
           </div>
         </div>
 
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-2 mb-6">
+          <button
+            onClick={() => setActiveFilter("All")}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              activeFilter === "All"
+                ? "bg-emerald text-white"
+                : "bg-secondary text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setActiveFilter("Public")}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              activeFilter === "Public"
+                ? "bg-emerald text-white"
+                : "bg-secondary text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Public
+          </button>
+          <button
+            onClick={() => setActiveFilter("Local")}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              activeFilter === "Local"
+                ? "bg-emerald text-white"
+                : "bg-secondary text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Local
+          </button>
+        </div>
+
         {/* Collections Grid */}
-        <div>
-          <h2 className="text-2xl font-semibold text-foreground mb-4">My Collections</h2>
-          {collections.length === 0 ? (
-            <Card className="bg-[#1D2639] border-transparent p-8">
-              <div className="text-center space-y-4">
-                <p className="text-foreground">
-                  You haven't added any words yet. Create your first collection to start learning.
-                </p>
-                <Button
-                  onClick={() => setIsDialogOpen(true)}
-                  className="bg-emerald hover:bg-emerald-dark"
-                >
-                  Create Your First Collection
-                </Button>
-              </div>
-            </Card>
-          ) : (
+        {filteredCollections.length === 0 ? (
+          <div className="text-center py-20 bg-card/50 rounded-lg border border-dashed border-border">
+            <p className="text-muted-foreground">
+              {activeFilter === "Public" 
+                ? "No public collections found"
+                : activeFilter === "Local"
+                ? "No local collections found"
+                : "No collections found. Create one to get started!"}
+            </p>
+          </div>
+        ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {collections.map((collection) => (
+            {filteredCollections.map((collection) => (
               <Card
                 key={collection.id}
-                className="border-transparent p-6 hover:shadow-lg transition-all duration-300"
-                style={{ backgroundColor: "#1D2639" }}
+                className="bg-card border-border hover:border-emerald transition-colors cursor-pointer group relative overflow-hidden"
               >
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-xl font-bold text-white mb-1">
-                      {collection.title || collection.name}
-                    </h3>
-                    <p className="text-sm text-slate-400">{collection.description}</p>
+                <div onClick={() => navigate(`/quiz/${collection.id}`)} className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="h-12 w-12 rounded-lg bg-emerald/10 flex items-center justify-center text-emerald group-hover:scale-110 transition-transform">
+                      <BookOpen className="h-6 w-6" />
+                    </div>
+                    {collection.is_public && (
+                      <span className="bg-blue-500/20 text-blue-500 text-xs px-2 py-1 rounded-full border border-blue-500/50">
+                        Public
+                      </span>
+                    )}
                   </div>
                   
-                  <div className="flex items-center text-slate-400">
-                    <BookOpen className="h-4 w-4 mr-2" />
-                    <span className="text-sm">{collection.wordCount || collection.word_count || 0} words</span>
-                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-foreground mb-1">
+                        {collection.title || collection.name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">{collection.description}</p>
+                    </div>
+                    
+                    <div className="flex items-center text-muted-foreground">
+                      <BookOpen className="h-4 w-4 mr-2" />
+                      <span className="text-sm">{collection.wordCount || collection.word_count || 0} words</span>
+                    </div>
 
-                  <div className="grid grid-cols-2 gap-3 pt-2">
-                    <Button
-                      onClick={() => navigate(`/battle/${collection.id}`)}
-                      className="col-span-2 text-white font-semibold h-10"
-                      style={{ backgroundColor: "#10B981" }}
-                    >
-                      <Swords className="h-4 w-4 mr-2" />
-                      Battle
-                    </Button>
-                    <Button
-                      onClick={() => navigate(`/quiz/${collection.id}`)}
-                      className="bg-slate-700 hover:bg-slate-600 text-white h-9"
-                      size="sm"
-                    >
-                      <Brain className="h-4 w-4 mr-2" />
-                      Quiz
-                    </Button>
-                    <Button
-                      onClick={() => navigate(`/flashcards/${collection.id}`)}
-                      variant="outline"
-                      className="border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white h-9"
-                      size="sm"
-                    >
-                      Cards
-                    </Button>
+                    <div className="grid grid-cols-2 gap-3 pt-2">
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/flashcards/${collection.id}`);
+                        }}
+                        variant="secondary"
+                        className="w-full bg-secondary hover:bg-secondary/80 text-foreground"
+                      >
+                        <Brain className="mr-2 h-4 w-4" />
+                        Study
+                      </Button>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/battle/${collection.id}`);
+                        }}
+                        className="w-full bg-navy hover:bg-navy/80"
+                      >
+                        <Swords className="mr-2 h-4 w-4" />
+                        Battle
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </Card>
             ))}
           </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
