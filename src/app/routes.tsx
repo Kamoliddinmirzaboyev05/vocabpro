@@ -6,6 +6,7 @@ import { Flashcards } from "./components/Flashcards";
 import { Summary } from "./components/Summary";
 import { Login } from "./components/Login";
 import { Profile } from "./components/Profile";
+import { Library } from "./components/Library";
 import { ProtectedLayout } from "./components/ProtectedLayout";
 
 export const router = createBrowserRouter([
@@ -19,6 +20,10 @@ export const router = createBrowserRouter([
       {
         path: "/dashboard",
         Component: Dashboard,
+      },
+      {
+        path: "/library",
+        Component: Library,
       },
       {
         path: "/profile",

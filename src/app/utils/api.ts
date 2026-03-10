@@ -28,6 +28,49 @@ export async function getAllCollections() {
   }));
 }
 
+export async function getPublicCollections() {
+  const { data, error } = await supabase
+    .from('collections')
+    .select('*, words(*)')
+    .eq('is_public', true)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error("Error fetching public collections:", error);
+    return [];
+  }
+
+  return (data || []).map((c: any) => ({
+    ...c,
+    name: c.title,
+    wordCount: (c.words?.length ?? c.word_count) || 0,
+    words: (c.words || []).map((w: any) => ({
+      ...w,
+      english: w.word,
+      correctAnswer: w.translation,
+      exampleSentence: w.example_sentence || "",
+    })),
+  }));
+}
+
+export async function cloneCollection(collectionId: string) {
+  const original = await getCollection(collectionId);
+  
+  const words = original.words.map((w: any) => ({
+    english: w.english || w.word,
+    translation: w.translation || w.correctAnswer
+  }));
+  
+  return await createCollection(
+    original.title,
+    original.description || "",
+    words,
+    false,
+    null,
+    null
+  );
+}
+
 export async function getCollection(id: string) {
   const { data, error } = await supabase
     .from('collections')
@@ -58,7 +101,10 @@ export async function getCollection(id: string) {
 export async function createCollection(
   title: string,
   description: string,
-  words: any[]
+  words: any[],
+  isPublic: boolean = false,
+  topic: string | null = null,
+  level: string | null = null
 ) {
   // 1. Get User Session
   const { data: { session } } = await supabase.auth.getSession();
@@ -71,7 +117,10 @@ export async function createCollection(
     .from('collections')
     .insert({ 
       title, 
-      user_id: session.user.id
+      user_id: session.user.id,
+      is_public: isPublic,
+      topic: topic,
+      level: level
     })
     .select()
     .single();

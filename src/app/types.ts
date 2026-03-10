@@ -16,4 +16,7 @@ export interface Collection {
   description?: string;
   wordCount: number;
   words: Word[];
+  is_public?: boolean;
+  topic?: string;
+  level?: string;
 }

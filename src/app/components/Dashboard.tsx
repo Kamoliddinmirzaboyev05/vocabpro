@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { Plus, BookOpen, Swords, Brain } from "lucide-react";
+import { Plus, BookOpen, Swords, Brain, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
+import { Switch } from "./ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import * as api from "../utils/api";
 import { PageSkeleton } from "./PageSkeleton";
 import { supabase } from "../utils/supabaseClient";
@@ -24,9 +26,19 @@ export function Dashboard() {
   const [jsonInput, setJsonInput] = useState("");
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [isPublic, setIsPublic] = useState(false);
+  const [topic, setTopic] = useState("");
+  const [level, setLevel] = useState("A1");
   
+  const ADMIN_EMAIL = "kamoliddinmirzaboyev2005@gmail.com";
 
   useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    getUser();
     fetchCollectionsDirect();
   }, []);
 
@@ -138,6 +150,9 @@ export function Dashboard() {
         newCollectionName,
         "User created collection",
         words,
+        isPublic,
+        isPublic ? topic : null,
+        isPublic ? level : null
       );
       await fetchCollectionsDirect();
     } catch (e) {
@@ -149,6 +164,9 @@ export function Dashboard() {
       setJsonInput("");
       setJsonError(null);
       setCreateMode("manual");
+      setIsPublic(false);
+      setTopic("");
+      setLevel("A1");
     }
   };
 
@@ -167,6 +185,10 @@ export function Dashboard() {
               <p className="text-sm md:text-base text-muted-foreground">Build your vocabulary through interactive learning</p>
             </div>
             <div className="flex items-center gap-4 self-end md:self-auto">
+              <Button onClick={() => navigate("/library")} variant="ghost" className="text-foreground hidden md:inline-flex">
+                <BookOpen className="mr-2 h-4 w-4" />
+                Library
+              </Button>
               <Button onClick={handleSignOut} variant="ghost" className="text-foreground hidden md:inline-flex">
                 Sign Out
               </Button>
@@ -192,6 +214,47 @@ export function Dashboard() {
                       className="bg-secondary border-border text-foreground"
                     />
                   </div>
+
+                  {user?.email === ADMIN_EMAIL && (
+                    <div className="p-4 border border-blue-500/30 rounded-md bg-blue-500/10 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="public-mode" className="text-foreground font-semibold">Make Public</Label>
+                        <Switch
+                          id="public-mode"
+                          checked={isPublic}
+                          onCheckedChange={setIsPublic}
+                        />
+                      </div>
+                      
+                      {isPublic && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                          <div>
+                            <Label htmlFor="topic" className="text-foreground">Topic</Label>
+                            <Input
+                              id="topic"
+                              value={topic}
+                              onChange={(e) => setTopic(e.target.value)}
+                              placeholder="e.g. Travel, Business"
+                              className="bg-secondary border-border text-foreground mt-1.5"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="level" className="text-foreground">Level</Label>
+                            <Select value={level} onValueChange={setLevel}>
+                              <SelectTrigger className="w-full mt-1.5 bg-secondary border-border text-foreground">
+                                <SelectValue placeholder="Select level" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-secondary border-border text-foreground">
+                                {["A1", "A2", "B1", "B2", "C1", "C2"].map((l) => (
+                                  <SelectItem key={l} value={l}>{l}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <Tabs value={createMode} onValueChange={(v) => setCreateMode(v as "manual" | "json")}>
                     <TabsList className="grid w-full grid-cols-2 bg-secondary">
                       <TabsTrigger 
